@@ -12,6 +12,7 @@ fn get_min_max(ws: i64, idx: i64, length: i64) -> (i64, i64) {
     let max = if ws + idx <= length { ws } else { length - idx };
     return (min, max);
 }
+
 fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usize) -> Array2<f64> {
     let (_, d) = x.dim();
     let mut y = x.clone();
