@@ -2,7 +2,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mean_shift import mean_shift_plus_plus, mean_shift_spatial
+from mean_shift import mean_shift_pp, mean_shift_spatial
 from sklearn.datasets import make_blobs
 from sklearn.neighbors import NearestNeighbors
 
@@ -21,24 +21,24 @@ class Timer:
         total_seconds = delta.total_seconds()
         minutes, seconds = divmod(total_seconds, 60)
         seconds, milliseconds = divmod(seconds * 1000, 1000)
-        print(f"{int(minutes)}:{int(seconds)}.{milliseconds}")
+        print(f"{self.name}: {int(minutes)}:{int(seconds)}.{milliseconds}")
 
 
 h, w, c = (100, 100, 3)
 image = np.random.randint(0, 255, (h, w, c)).astype(np.float64)
 data = image.reshape(h * w, -1).astype(np.float64)
 
-
-with Timer("Mean-Shift"):
+# Comparing them both is not wise, since the spacial Ms works on grid data
+with Timer("Mean-Shift-Spatial"):
     mean_shift_spatial(image, win_size=21, color_radius=3, max_iter=100, threshold=1)
 
 with Timer("Mean-Shift++"):
-    mean_shift_plus_plus(data, band_width=3, threshold=1, max_iter=100)
+    mean_shift_pp(data, band_width=20, threshold=1, max_iter=100)
 
 
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=1.0, random_state=42)
 
-result = mean_shift_plus_plus(X, band_width=1, threshold=1, max_iter=100)
+result = mean_shift_pp(X, band_width=1, threshold=1, max_iter=100)
 cluster_centers = np.unique(np.round(result, 0), axis=1)
 nbrs = NearestNeighbors(n_neighbors=1).fit(cluster_centers)
 distances, indices = nbrs.kneighbors(X)

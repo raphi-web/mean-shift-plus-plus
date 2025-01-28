@@ -169,7 +169,7 @@ fn mean_shift_spatial(
     return image_arr;
 }
 
-#[pyfunction]
+#[pyfunction(name = "mean_shift_pp")]
 fn mean_shift_plus_plus_py<'py>(
     py: Python<'py>,
     data: PyReadonlyArray2<'py, f64>,
@@ -180,7 +180,7 @@ fn mean_shift_plus_plus_py<'py>(
     mean_shift_pp(&data.to_owned_array(), band_width, threshold, max_iter).to_pyarray(py)
 }
 
-#[pyfunction]
+#[pyfunction(name = "mean_shift_spatial")]
 fn mean_shift_spatial_py<'py>(
     py: Python<'py>,
     image: PyReadonlyArray3<'py, f64>,
