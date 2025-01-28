@@ -1,11 +1,151 @@
+use core::f64;
 use dashmap::DashMap;
-use ndarray::parallel::prelude::*;
+use ndarray::{parallel::prelude::*, ArrayView1, Order};
 use numpy::{
-    ndarray::{s, Array1, Array2, Array3, Axis},
+    ndarray::{concatenate, s, Array1, Array2, Array3, Axis},
     PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3, ToPyArray,
 };
 use pyo3::prelude::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    i32,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+fn mean_shift_pp_spatial(
+    image: &Array3<f64>,
+    band_width: f64,
+    threshold: f64,
+    window_size: f64,
+    max_iter: usize,
+) -> Array3<f64> {
+    let (h, w, d) = image.dim();
+    let d = d + 2;
+    let indices: Vec<f64> = (0..h)
+        .into_par_iter()
+        .flat_map_iter(|i| (0..w).flat_map(move |j| vec![i as f64, j as f64]))
+        .collect();
+
+    let indices_arr = Array2::from_shape_vec((h * w, 2), indices).unwrap();
+    let x = image.to_shape(((h * w, d - 2), Order::RowMajor)).unwrap();
+    let x = concatenate(Axis(1), &[indices_arr.view(), x.view()]).unwrap();
+    let mut y = x.clone();
+    let mut t = 1;
+
+    // Function to calculate the grid index for a given row
+    let calc_grid_idx = |row: &ArrayView1<f64>| -> Vec<i32> {
+        row.iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                if i < 2 {
+                    (v / window_size).floor() as i32
+                } else {
+                    (v / band_width).floor() as i32
+                }
+            })
+            .collect()
+    };
+
+    loop {
+        let c: DashMap<Vec<i32>, AtomicUsize> = DashMap::new();
+        let s: DashMap<Vec<i32>, Array1<f64>> = DashMap::new();
+
+        // Assign points to grid cells and update counts & sums in parallel
+        y.axis_iter(Axis(0)).into_par_iter().for_each(|row| {
+            let grid_idx = calc_grid_idx(&row);
+
+            c.entry(grid_idx.clone())
+                .or_insert_with(|| AtomicUsize::new(0))
+                .fetch_add(1, Ordering::SeqCst);
+
+            s.entry(grid_idx.clone())
+                .or_insert_with(|| Array1::zeros(d))
+                .iter_mut()
+                .zip(row.iter())
+                .for_each(|(a, &b)| *a += b);
+        });
+
+        // Compute new positions in parallel
+        let y_vec: Vec<_> = y
+            .axis_iter(Axis(0))
+            .into_par_iter()
+            .map(|row| {
+                let grid_idx = calc_grid_idx(&row);
+
+                // Generate all neighbor offsets in multi-dimensional space
+                let mut neighbors = vec![grid_idx.clone()];
+                for j in 0..d {
+                    let mut new_neighbors = vec![];
+                    for neighbor in &neighbors {
+                        let mut neighbor_down = neighbor.clone();
+                        let mut neighbor_up = neighbor.clone();
+                        neighbor_down[j] -= 1;
+                        neighbor_up[j] += 1;
+                        new_neighbors.push(neighbor_down);
+                        new_neighbors.push(neighbor_up);
+                    }
+                    neighbors.extend(new_neighbors);
+                }
+
+                let mut sum_s = Array1::<f64>::zeros(d);
+                let mut sum_c = 0;
+                for neighbor in neighbors {
+                    if let Some(count) = c.get(&neighbor) {
+                        sum_s
+                            .iter_mut()
+                            .zip(s.get(&neighbor).unwrap().iter())
+                            .skip(2) // Skip first two spatial coordinates
+                            .for_each(|(a, &b)| *a += b);
+                        sum_c += count.load(Ordering::SeqCst);
+                    }
+                }
+
+                if sum_c > 0 {
+                    // Only update non-spatial coordinates
+                    let mut new_row = row.to_owned();
+                    new_row
+                        .iter_mut()
+                        .skip(2)
+                        .zip((sum_s / sum_c as f64).iter().skip(2))
+                        .for_each(|(a, &b)| *a = b);
+                    new_row.to_vec()
+                } else {
+                    row.to_owned().to_vec()
+                }
+            })
+            .collect();
+
+        let (r, _c) = y.dim();
+        let y_new: Array2<f64> =
+            Array2::from_shape_vec((r, d), y_vec.into_iter().flatten().collect()).unwrap();
+
+        // Convergence check for non-spatial coordinates
+        let shift: f64 = y_new
+            .axis_iter(Axis(0))
+            .zip(y.axis_iter(Axis(0)))
+            .map(|(new_row, old_row)| {
+                new_row
+                    .iter()
+                    .skip(2)
+                    .zip(old_row.iter().skip(2))
+                    .map(|(a, b)| (a - b).abs())
+                    .sum::<f64>()
+            })
+            .sum();
+
+        if (shift <= threshold) || (t >= max_iter) {
+            break;
+        }
+
+        y = y_new;
+        t += 1;
+    }
+
+    let sliced = y.slice(s![.., 2..]);
+    sliced
+        .to_shape(((h, w, d - 2), Order::RowMajor))
+        .unwrap()
+        .to_owned()
+}
 
 fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usize) -> Array2<f64> {
     let (_, d) = x.dim();
@@ -170,6 +310,19 @@ fn mean_shift_spatial(
     return image_arr;
 }
 
+#[pyfunction(name = "mean_shift_pp_spatial")]
+fn mean_shift_pp_spatial_py<'py>(
+    py: Python<'py>,
+    image: PyReadonlyArray3<'py, f64>,
+    win_size: f64,
+    color_radius: f64,
+    max_iter: usize,
+    threshold: f64,
+) -> Bound<'py, PyArray3<f64>> {
+    let arr = image.to_owned_array();
+    mean_shift_pp_spatial(&arr, color_radius, threshold, win_size, max_iter).to_pyarray(py)
+}
+
 #[pyfunction(name = "mean_shift_pp")]
 fn mean_shift_plus_plus_py<'py>(
     py: Python<'py>,
@@ -190,7 +343,7 @@ fn mean_shift_spatial_py<'py>(
     max_iter: usize,
     threshold: f64,
 ) -> Bound<'py, PyArray3<f64>> {
-    let image_arr = image.as_array().to_owned();
+    let image_arr = image.to_owned_array();
     mean_shift_spatial(image_arr, win_size, color_radius, max_iter, threshold).to_pyarray(py)
 }
 
@@ -198,6 +351,7 @@ fn mean_shift_spatial_py<'py>(
 fn mean_shift(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mean_shift_spatial_py, m)?)?;
     m.add_function(wrap_pyfunction!(mean_shift_plus_plus_py, m)?)?;
+    m.add_function(wrap_pyfunction!(mean_shift_pp_spatial_py, m)?)?;
     Ok(())
 }
 // for the meanshift plus plus
