@@ -1,7 +1,9 @@
+use core::f64;
+use dashmap::DashMap;
 use ndarray::parallel::prelude::*;
 use numpy::{
     ndarray::{s, Array1, Array2, Array3, Axis},
-    IntoPyArray, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3, ToPyArray,
+    PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3, ToPyArray,
 };
 use pyo3::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -10,20 +12,6 @@ fn get_min_max(ws: i64, idx: i64, length: i64) -> (i64, i64) {
     let max = if ws + idx <= length { ws } else { length - idx };
     return (min, max);
 }
-
-#[pyfunction]
-fn mean_shift_plus_plus<'py>(
-    py: Python<'py>,
-    data: PyReadonlyArray2<'py, f64>,
-    band_width: f64,
-    threshold: f64,
-    max_iter: usize,
-) -> Bound<'py, PyArray2<f64>> {
-    mean_shift_pp(&data.to_owned_array(), band_width, threshold, max_iter).to_pyarray(py)
-}
-
-use dashmap::DashMap;
-
 fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usize) -> Array2<f64> {
     let (_, d) = x.dim();
     let mut y = x.clone();
@@ -110,16 +98,15 @@ fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usi
 
     y
 }
-#[pyfunction]
-fn mean_shift_spatial<'py>(
-    py: Python<'py>,
-    image: PyReadonlyArray3<'py, f64>,
+
+fn mean_shift_spatial(
+    image: Array3<f64>,
     win_size: i64,
     color_radius: f64,
     max_iter: usize,
     threshold: f64,
-) -> Bound<'py, PyArray3<f64>> {
-    let mut image_arr = image.as_array().to_owned();
+) -> Array3<f64> {
+    let mut image_arr = image.to_owned();
     let h = image_arr.shape()[0];
     let w = image_arr.shape()[1];
     let c = image_arr.shape()[2];
@@ -178,14 +165,37 @@ fn mean_shift_spatial<'py>(
         }
     }
 
-    return image_arr.into_pyarray(py);
+    return image_arr;
 }
 
-/// A Python module implemented in Rust.
+#[pyfunction]
+fn mean_shift_plus_plus_py<'py>(
+    py: Python<'py>,
+    data: PyReadonlyArray2<'py, f64>,
+    band_width: f64,
+    threshold: f64,
+    max_iter: usize,
+) -> Bound<'py, PyArray2<f64>> {
+    mean_shift_pp(&data.to_owned_array(), band_width, threshold, max_iter).to_pyarray(py)
+}
+
+#[pyfunction]
+fn mean_shift_spatial_py<'py>(
+    py: Python<'py>,
+    image: PyReadonlyArray3<'py, f64>,
+    win_size: i64,
+    color_radius: f64,
+    max_iter: usize,
+    threshold: f64,
+) -> Bound<'py, PyArray3<f64>> {
+    let image_arr = image.as_array().to_owned();
+    mean_shift_spatial(image_arr, win_size, color_radius, max_iter, threshold).to_pyarray(py)
+}
+
 #[pymodule]
 fn mean_shift(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(mean_shift_spatial, m)?)?;
-    m.add_function(wrap_pyfunction!(mean_shift_plus_plus, m)?)?;
+    m.add_function(wrap_pyfunction!(mean_shift_spatial_py, m)?)?;
+    m.add_function(wrap_pyfunction!(mean_shift_plus_plus_py, m)?)?;
     Ok(())
 }
 // for the meanshift plus plus
