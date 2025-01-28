@@ -1,4 +1,3 @@
-use core::f64;
 use dashmap::DashMap;
 use ndarray::parallel::prelude::*;
 use numpy::{
@@ -7,11 +6,6 @@ use numpy::{
 };
 use pyo3::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
-fn get_min_max(ws: i64, idx: i64, length: i64) -> (i64, i64) {
-    let min = if ws < idx { -ws } else { -idx };
-    let max = if ws + idx <= length { ws } else { length - idx };
-    return (min, max);
-}
 
 fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usize) -> Array2<f64> {
     let (_, d) = x.dim();
@@ -113,6 +107,13 @@ fn mean_shift_spatial(
     let c = image_arr.shape()[2];
     let win_size_half = win_size / 2;
     let mut new_image: Array3<f64> = Array3::zeros([h, w, c]);
+
+    let get_min_max = |ws: i64, idx: i64, length: i64| -> (i64, i64) {
+        let min = if ws < idx { -ws } else { -idx };
+        let max = if ws + idx <= length { ws } else { length - idx };
+        (min, max)
+    };
+
     for _ in 0..max_iter {
         let new_rows: Vec<(Array2<f64>, bool)> = (0..h)
             .into_par_iter()
