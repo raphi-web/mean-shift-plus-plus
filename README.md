@@ -8,14 +8,6 @@ Wouldn't recomend both of them in production though.
 Orginal Image  
 ![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/input_files/test-image.jpg?raw=true)
 
+![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/result-1.png?raw=true)
 
-
-This is the spatial Mean-Shift  
-![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/Mean-Shift-Spatial.jpg?raw=true)
-
-
-This is the spatial Mean-Shift Plus Plus  
-![Spatial Mean Shift Plus Plus](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/Mean-Shift-pp-Spatial.jpg?raw=true)  
-
-This is the Mean-Shift Plus Plus that only works in color-/feature-space  
-![Spatial Mean Shift Plus Plus](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/Mean-Shift_pp.jpg?raw=true)
+![Mean Shift++](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/result-2.png?raw=true)
