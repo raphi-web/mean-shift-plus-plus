@@ -5,4 +5,4 @@ Both are slow compared to GPU based alternatives.
 
 Wouldn't recomend both of them in production though.  
 
-![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/Mean-Shift-Spatial.jpg?raw=true)
+![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/Mean-Shift-Spatial.jpg?raw=true)
