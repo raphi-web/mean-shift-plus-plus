@@ -25,37 +25,58 @@ class Timer:
         print(f"{self.name}: {int(minutes):02d}:{int(seconds):02d}.{milliseconds}")
 
 
-# h, w, c = (100, 100, 3)
-# image = np.random.randint(0, 255, (h, w, c)).astype(np.float64)
 image = np.array(Image.open("./input_files/test-image.jpg")).astype(np.float64)
 h, w, c = image.shape
 data = image.reshape(h * w, -1).astype(np.float64)
 print("Image Shape: ", image.shape)
 
+color_radius = 10
+window_size = 7
+max_iter = 30
+
 
 # Comparing the different mean-shifts
 with Timer("Mean-Shift-Spatial"):
     ms_sp_out = mean_shift_spatial(
-        image, win_size=31, color_radius=15, max_iter=15, threshold=1
+        image,
+        win_size=window_size,
+        color_radius=color_radius,
+        max_iter=max_iter,
+        threshold=1,
     )
 
 with Timer("Mean-Shift++"):
-    ms_pp_out = mean_shift_pp(data, band_width=15, threshold=1, max_iter=15)
+    ms_pp_out = mean_shift_pp(
+        data, band_width=color_radius, threshold=1, max_iter=max_iter
+    )
 
 
 with Timer("Mean-Shift++-Spatial"):
     ms_pp_sp_out = mean_shift_pp_spatial(
-        image, win_size=31, color_radius=15, max_iter=15, threshold=1
+        image,
+        win_size=window_size,
+        color_radius=color_radius,
+        max_iter=max_iter,
+        threshold=1,
     )
 
-img = Image.fromarray(ms_sp_out.astype(np.uint8))
-img.save("./output_files/Mean-Shift-Spatial.jpg")
-img = Image.fromarray(ms_pp_out.reshape(h, w, c).astype(np.uint8))
-img.save("./output_files/Mean-Shift_pp.jpg")
-img = Image.fromarray(ms_pp_sp_out.astype(np.uint8))
-img.save("./output_files/Mean-Shift-pp-Spatial.jpg")
+img_a = Image.fromarray(ms_sp_out.astype(np.uint8))
+img_b = Image.fromarray(ms_pp_out.reshape(h, w, c).astype(np.uint8))
+img_c = Image.fromarray(ms_pp_sp_out.astype(np.uint8))
 
+fig, axs = plt.subplots(1, 3, figsize=(14, 5))
+[ax.axis("off") for ax in axs]
+axs[0].imshow(img_a)
+axs[0].set_title("Spatial Mean-Shift")
+axs[1].imshow(img_b)
+axs[1].set_title("Mean-Shift++")
+axs[2].imshow(img_c)
+axs[2].set_title("Spatial Mean-Shift++")
+plt.tight_layout()
+plt.savefig("./output_files/result-1.png", dpi=200)
+plt.show()
 
+# activate if you want to see the clustering in feature space
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=1.0, random_state=42)
 
 result = mean_shift_pp(X, band_width=1, threshold=1, max_iter=100)
@@ -74,4 +95,5 @@ plt.scatter(
     marker="x",
 )
 plt.title("MeanShift++ Clustering")
+plt.savefig("./output_files/result-2.png", dpi=200)
 plt.show()

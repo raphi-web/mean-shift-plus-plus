@@ -7,7 +7,9 @@ use numpy::{
 };
 use pyo3::prelude::*;
 use rayon::iter::ParallelBridge;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::{
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 
 fn mean_shift_pp_spatial(
     image: &Array3<f64>,
@@ -274,6 +276,7 @@ fn mean_shift_spatial(
 
     for _ in 0..max_iter {
         let converged = AtomicBool::new(true);
+
         // compute new pixels in parallel
         pixels = (0..h)
             .into_par_iter()
@@ -348,6 +351,7 @@ fn mean_shift_pp_spatial_py<'py>(
     threshold: f64,
 ) -> Bound<'py, PyArray3<f64>> {
     let arr = image.to_owned_array();
+    let arr = arr.mapv(|x| x as f64);
     mean_shift_pp_spatial(&arr, color_radius, threshold, win_size, max_iter).to_pyarray(py)
 }
 
