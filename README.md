@@ -11,6 +11,8 @@ Mean-Shift++-Spatial: 00:50s.125ms
 Wouldn't recomend both of them in production though.
 
 Orginal Image  
+
+
 ![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/input_files/test-image.jpg?raw=true)
 
 ![Spatial Mean Shift](https://github.com/raphi-web/mean-shift-plus-plus/blob/master/output_files/result-1.png?raw=true)
