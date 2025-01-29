@@ -25,11 +25,10 @@ class Timer:
         print(f"{self.name}: {int(minutes):02d}:{int(seconds):02d}.{milliseconds}")
 
 
-h, w, c = (512, 512, 3)
-image = np.random.randint(0, 255, (h, w, c)).astype(np.float64)
-
-# image = np.array(Image.open("./input_files/test-image.jpg")).astype(np.float64)
-# h, w, c = image.shape
+# h, w, c = (100, 100, 3)
+# image = np.random.randint(0, 255, (h, w, c)).astype(np.float64)
+image = np.array(Image.open("./input_files/test-image.jpg")).astype(np.float64)
+h, w, c = image.shape
 data = image.reshape(h * w, -1).astype(np.float64)
 print("Image Shape: ", image.shape)
 
@@ -37,25 +36,25 @@ print("Image Shape: ", image.shape)
 # Comparing the different mean-shifts
 with Timer("Mean-Shift-Spatial"):
     ms_sp_out = mean_shift_spatial(
-        image, win_size=71, color_radius=15, max_iter=100, threshold=1
+        image, win_size=31, color_radius=15, max_iter=15, threshold=1
     )
 
 with Timer("Mean-Shift++"):
-    ms_pp_out = mean_shift_pp(data, band_width=15, threshold=1, max_iter=100)
+    ms_pp_out = mean_shift_pp(data, band_width=15, threshold=1, max_iter=15)
 
 
 with Timer("Mean-Shift++-Spatial"):
     ms_pp_sp_out = mean_shift_pp_spatial(
-        image, win_size=71, color_radius=15, max_iter=100, threshold=1
+        image, win_size=31, color_radius=15, max_iter=15, threshold=1
     )
-#
-# img = Image.fromarray(ms_sp_out.astype(np.uint8))
-# img.save("./output_files/Mean-Shift-Spatial.jpg")
-# img = Image.fromarray(ms_pp_out.reshape(h, w, c).astype(np.uint8))
-# img.save("./output_files/Mean-Shift_pp.jpg")
-# img = Image.fromarray(ms_pp_sp_out.astype(np.uint8))
-# img.save("./output_files/Mean-Shift-pp-Spatial.jpg")
-#
+
+img = Image.fromarray(ms_sp_out.astype(np.uint8))
+img.save("./output_files/Mean-Shift-Spatial.jpg")
+img = Image.fromarray(ms_pp_out.reshape(h, w, c).astype(np.uint8))
+img.save("./output_files/Mean-Shift_pp.jpg")
+img = Image.fromarray(ms_pp_sp_out.astype(np.uint8))
+img.save("./output_files/Mean-Shift-pp-Spatial.jpg")
+
 
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=1.0, random_state=42)
 
