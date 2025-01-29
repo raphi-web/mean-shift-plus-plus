@@ -6,6 +6,7 @@ use numpy::{
     PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3, ToPyArray,
 };
 use pyo3::prelude::*;
+use rayon::iter::ParallelBridge;
 use std::{
     i32,
     sync::atomic::{AtomicUsize, Ordering},
@@ -122,6 +123,7 @@ fn mean_shift_pp_spatial(
         let shift: f64 = y_new
             .axis_iter(Axis(0))
             .zip(y.axis_iter(Axis(0)))
+            .par_bridge()
             .map(|(new_row, old_row)| {
                 new_row
                     .iter()
