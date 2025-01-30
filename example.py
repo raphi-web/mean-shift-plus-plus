@@ -18,7 +18,6 @@ class Timer:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         end_time = datetime.now()
         delta = end_time - self.start_time
-
         total_seconds = delta.total_seconds()
         minutes, seconds = divmod(total_seconds, 60)
         seconds, milliseconds = divmod(seconds * 1000, 1000)

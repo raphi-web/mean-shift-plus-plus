@@ -8,6 +8,7 @@ use numpy::{
 use pyo3::prelude::*;
 use rayon::iter::ParallelBridge;
 use std::{
+    i64,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
@@ -83,6 +84,7 @@ fn mean_shift_pp_spatial(
                 let mut neighbors = vec![grid_idx.clone()];
                 for j in 0..d {
                     let mut new_neighbors = vec![];
+
                     for neighbor in &neighbors {
                         let mut neighbor_down = neighbor.clone();
                         let mut neighbor_up = neighbor.clone();
@@ -124,7 +126,7 @@ fn mean_shift_pp_spatial(
 
         let (r, _c) = y.dim();
         let y_new: Array2<f64> =
-            Array2::from_shape_vec((r, d), y_vec.into_iter().flatten().collect()).unwrap();
+            Array2::from_shape_vec((r, d), y_vec.into_par_iter().flatten().collect()).unwrap();
 
         // Convergence check for non-spatial coordinates
         let shift: f64 = y_new
@@ -172,6 +174,7 @@ fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usi
                 .iter()
                 .map(|&v| (v / band_width).floor() as i32)
                 .collect();
+
             cnt.entry(grid_idx.clone())
                 .or_insert_with(|| AtomicUsize::new(0))
                 .fetch_add(1, Ordering::SeqCst);
@@ -245,7 +248,6 @@ fn mean_shift_pp(x: &Array2<f64>, band_width: f64, threshold: f64, max_iter: usi
 
     y
 }
-
 fn mean_shift_spatial(
     image: Array3<f64>,
     win_size: i64,
@@ -253,94 +255,73 @@ fn mean_shift_spatial(
     max_iter: usize,
     threshold: f64,
 ) -> Array3<f64> {
-    // for calculating the bounds of window
-    let get_valid_range = |ws: i64, idx: i64, length: i64| -> (usize, usize) {
-        (
-            idx.saturating_sub(ws) as usize,
-            (idx + ws).min(length - 1) as usize,
-        )
+    let get_min_max = |ws: i64, idx: i64, length: i64| -> (i64, i64) {
+        let min = if ws < idx { -ws } else { -idx };
+        let max = if ws + idx <= length { ws } else { length - idx };
+        (min, max)
     };
 
-    let (h, w, c) = (image.shape()[0], image.shape()[1], image.shape()[2]);
+    let mut image_arr = image.to_owned();
+    let h = image_arr.shape()[0];
+    let w = image_arr.shape()[1];
+    let c = image_arr.shape()[2];
     let win_size_half = win_size / 2;
-
-    // create a flattend vec of pixels
-    let mut pixels: Vec<Array1<f64>> = (0..h * w)
-        .into_par_iter()
-        .map(|idx| {
-            let i = idx / w;
-            let j = idx % w;
-            image.slice(s![i, j, ..]).to_owned()
-        })
-        .collect();
-
+    let mut new_image: Array3<f64> = Array3::zeros([h, w, c]);
     for _ in 0..max_iter {
-        let converged = AtomicBool::new(true);
-
-        // compute new pixels in parallel
-        pixels = (0..h)
+        let new_rows: Vec<(Array2<f64>, bool)> = (0..h)
             .into_par_iter()
-            .flat_map(|i| {
-                // range  of rows
-                let (min_row, max_row) = get_valid_range(win_size_half, i as i64, h as i64);
-                (0..w)
-                    .into_par_iter()
-                    .map(|j| {
-                        // range of columns
-                        let (min_col, max_col) = get_valid_range(win_size_half, j as i64, w as i64);
+            .map(|i| {
+                let mut converged = true;
+                let (min_row, max_row) = get_min_max(win_size_half, i as i64, h as i64);
+                let mut current_row: Array2<f64> = Array2::zeros([w, c]);
+                for j in 0..w {
+                    let pixel = image_arr.slice(s![i, j, ..]);
+                    let mut cnt = 0;
+                    let (min_col, max_col) = get_min_max(win_size_half, j as i64, w as i64);
+                    let mut mean = Array1::zeros(c);
 
-                        // Current pixel
-                        let pixel = &pixels[i * w + j];
-
-                        let mut mean = Array1::zeros(c);
-                        let mut cnt = 0;
-
-                        // Iterate over the neighborhood
-                        for row in min_row..max_row {
-                            for col in min_col..max_col {
-                                let neighbor = &pixels[row as usize * w as usize + col as usize];
-                                let diff = pixel - neighbor;
-                                let norm = diff.mapv(|x| x.powi(2)).sum().sqrt();
-
-                                if norm <= color_radius {
-                                    // update sum and count
-                                    mean += neighbor;
-                                    cnt += 1;
-                                }
+                    for di in min_row..max_row {
+                        let row = i as i64 + di;
+                        for dj in min_col..max_col {
+                            let col = j as i64 + dj;
+                            let neighbour = image_arr.slice(s![row as usize, col as usize, ..]);
+                            let diff = &pixel - &neighbour;
+                            let norm = diff.mapv(|x| x.powi(2)).sum().sqrt();
+                            if norm <= color_radius {
+                                mean += &neighbour;
+                                cnt += 1;
                             }
                         }
-
-                        // Update the pixel
-                        if cnt > 0 {
-                            mean /= cnt as f64;
-                        } else {
-                            mean.assign(&pixel);
-                        }
-
-                        let norm = (pixel - &mean).mapv(|x| x.powi(2)).sum().sqrt();
+                    } // for di
+                    if cnt > 0 {
+                        mean /= cnt as f64;
+                        let norm = (&pixel - &mean).mapv(|x| x.powi(2)).sum().sqrt();
+                        current_row.slice_mut(s![j, ..]).assign(&mean);
                         if norm > threshold {
-                            converged.store(false, Ordering::Relaxed);
+                            converged = false;
                         }
-
-                        mean
-                    })
-                    .collect::<Vec<Array1<f64>>>()
+                    } else {
+                        current_row.slice_mut(s![j, ..]).assign(&pixel);
+                    }
+                } // for j
+                return (current_row, converged);
             })
-            .collect();
-        if converged.load(Ordering::Relaxed) {
+            .collect(); // for i
+        let mut converged = true;
+        for (idx, (arr, conv)) in new_rows.iter().enumerate() {
+            new_image.slice_mut(s![idx, .., ..]).assign(&arr);
+            if !conv {
+                converged = false;
+            }
+        }
+        image_arr = new_image.clone();
+        if converged {
             break;
         }
     }
 
-    let flat_values = pixels
-        .par_iter()
-        .map(|pxl| pxl.to_vec())
-        .flatten()
-        .collect::<Vec<f64>>();
-
-    Array3::from_shape_vec((h, w, c), flat_values).unwrap()
+    return image_arr;
 }
-
 #[pyfunction(name = "mean_shift_pp_spatial")]
 fn mean_shift_pp_spatial_py<'py>(
     py: Python<'py>,
