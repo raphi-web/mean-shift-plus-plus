@@ -2,7 +2,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mean_shift import mean_shift_pp, mean_shift_pp_spatial, mean_shift_spatial
+from mean_shift import mean_shift_pp, mean_shift_spatial
 from PIL import Image
 from sklearn.datasets import make_blobs
 from sklearn.neighbors import NearestNeighbors
@@ -29,53 +29,35 @@ h, w, c = image.shape
 data = image.reshape(h * w, -1).astype(np.float64)
 print("Image Shape: ", image.shape)
 
-color_radius = 10
-window_size = 7
-max_iter = 30
 
-
-# Comparing the different mean-shifts
 with Timer("Mean-Shift-Spatial"):
     ms_sp_out = mean_shift_spatial(
         image,
-        win_size=window_size,
-        color_radius=color_radius,
-        max_iter=max_iter,
+        win_size=11,
+        color_radius=7,
+        max_iter=999,
         threshold=1,
     )
+
 
 with Timer("Mean-Shift++"):
-    ms_pp_out = mean_shift_pp(
-        data, band_width=color_radius, threshold=1, max_iter=max_iter
-    )
-
-
-with Timer("Mean-Shift++-Spatial"):
-    ms_pp_sp_out = mean_shift_pp_spatial(
-        image,
-        win_size=window_size,
-        color_radius=color_radius,
-        max_iter=max_iter,
-        threshold=1,
-    )
+    ms_pp_out = mean_shift_pp(data, band_width=5, threshold=1, max_iter=999)
 
 img_a = Image.fromarray(ms_sp_out.astype(np.uint8))
 img_b = Image.fromarray(ms_pp_out.reshape(h, w, c).astype(np.uint8))
-img_c = Image.fromarray(ms_pp_sp_out.astype(np.uint8))
-
-fig, axs = plt.subplots(1, 3, figsize=(14, 5))
+print(ms_pp_out.shape)
+#
+fig, axs = plt.subplots(1, 2, figsize=(12, 8))
 [ax.axis("off") for ax in axs]
 axs[0].imshow(img_a)
 axs[0].set_title("Spatial Mean-Shift")
 axs[1].imshow(img_b)
 axs[1].set_title("Mean-Shift++")
-axs[2].imshow(img_c)
-axs[2].set_title("Spatial Mean-Shift++")
 plt.tight_layout()
 plt.savefig("./output_files/result-1.png", dpi=200)
 plt.show()
 
-# activate if you want to see the clustering in feature space
+# the clustering in feature space
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=1.0, random_state=42)
 
 result = mean_shift_pp(X, band_width=1, threshold=1, max_iter=100)
