@@ -4,9 +4,9 @@ Both are slow compared to GPU based alternatives.
 
 
 I tested the proessing time:  
-Mean-Shift-Spatial: 00m:36s.514ms  
-Mean-Shift++: 00:03s.420ms  
-Mean-Shift++-Spatial: 00:50s.125ms  
+Mean-Shift-Spatial: 00m:27s.329ms  
+Mean-Shift++: 00m:06s.257ms  
+
 
 Wouldn't recomend both of them in production though.
 
